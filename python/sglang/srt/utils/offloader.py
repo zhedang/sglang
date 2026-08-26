@@ -158,12 +158,16 @@ class OffloaderV1(BaseOffloader):
 
             def forward(*args, **kwargs):
                 module.forward = original_forward
-                device_state = {
-                    # here we blindly call `to(device)`
-                    # if the parameter is already on the device, it will be a no-op
-                    k: v.to(device, non_blocking=True)
-                    for k, v in module.state_dict().items()
-                }
+                device_state = {}
+                device_cache = {}
+
+                for k, v in module.state_dict().items():
+                    key = v.data_ptr()
+
+                    if key not in device_cache:
+                        device_cache[key] = v.to(device, non_blocking=True)
+
+                    device_state[k] = device_cache[key]
                 for name, buffer in module.named_buffers(remove_duplicate=False):
                     if name.endswith("gemma_weight"):
                         device_state[name] = buffer.to(device, non_blocking=True)
